@@ -1,0 +1,1060 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>粒子迷宮森林</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: 全螢幕 Canvas 森林，左上角標題與計數，底部操作列；手機加方向鍵 */
+  :root {
+    color-scheme: dark;
+    --forest: #07170F;      /* 夜色底 */
+    --pine: #0F3322;        /* 深綠 */
+    --moss: #2F7A4C;        /* 中綠 */
+    --sprout: #A6E88F;      /* 淺綠主色 */
+    --ember: #FF9A3C;       /* 大橘貓與煙火 */
+    --dew: #E3F7D6;         /* 文字 */
+    --dim: #86A994;         /* 次要文字 */
+    --acc-rgb: 166, 232, 143;
+    --bg-rgb: 7, 23, 15;
+    --deep-rgb: 15, 51, 34;
+    --panel: rgba(var(--bg-rgb), 0.72);
+    --line: rgba(var(--acc-rgb), 0.22);
+    --display: "Noto Serif TC", "Songti TC", serif;
+    --body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    transition: background .6s;
+    background: var(--forest); color: var(--dew);
+    font-family: var(--body); font-size: 15px; line-height: 1.6;
+    overflow: hidden; -webkit-font-smoothing: antialiased;
+    user-select: none; -webkit-user-select: none;
+  }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  .hud {
+    position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); left: 16px; right: 16px;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;
+    pointer-events: none; z-index: 2;
+  }
+  .brand { display: flex; flex-direction: column; gap: 2px; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; color: var(--sprout); text-transform: uppercase; }
+  h1 {
+    margin: 0; font-family: var(--display); font-weight: 900;
+    font-size: clamp(24px, 3.4vw, 40px); line-height: 1.1; letter-spacing: 0.06em;
+    text-shadow: 0 0 24px rgba(var(--acc-rgb), 0.35);
+  }
+  .stats {
+    display: flex; gap: 18px; padding: 10px 16px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  .stats div { display: flex; flex-direction: column; min-width: 56px; }
+  .stats span { font-size: 11px; color: var(--dim); letter-spacing: 0.1em; }
+  .stats b { font-family: var(--mono); font-weight: 500; font-size: 20px; font-variant-numeric: tabular-nums; color: var(--sprout); }
+
+  .bar {
+    position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; z-index: 2; pointer-events: none;
+  }
+  .bar > * { pointer-events: auto; }
+  button {
+    font: 500 14px/1 var(--body); color: var(--dew); cursor: pointer;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    padding: 11px 18px; transition: border-color .2s, background .2s, color .2s;
+  }
+  button:hover { border-color: var(--sprout); }
+  button:focus-visible { outline: 2px solid var(--sprout); outline-offset: 2px; }
+  button[aria-pressed="true"] { background: var(--sprout); color: var(--forest); border-color: var(--sprout); }
+  .fire { border-color: var(--ember); color: var(--ember); }
+  .fire:hover { background: var(--ember); color: var(--forest); border-color: var(--ember); }
+  .toast {
+    position: fixed; left: 50%; top: calc(96px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+    z-index: 2; max-width: calc(100% - 32px); padding: 9px 16px; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--ember); color: var(--dew); font-size: 14px;
+    pointer-events: none; transition: opacity .3s; text-align: center;
+  }
+  [hidden] { display: none !important; }
+  .hint { font-size: 13px; color: var(--dim); pointer-events: none; }
+  kbd { font-family: var(--mono); font-size: 12px; color: var(--sprout); }
+
+  .pad {
+    position: fixed; right: 16px; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); z-index: 2;
+    display: none; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 6px;
+  }
+  .pad button { padding: 0; border-radius: 12px; font-size: 18px; }
+  .pad .f { grid-area: 2 / 2; font-size: 14px; }
+  .pad .u { grid-area: 1 / 2; } .pad .l { grid-area: 2 / 1; } .pad .r { grid-area: 2 / 3; } .pad .d { grid-area: 3 / 2; }
+
+  .win {
+    position: fixed; inset: 0; z-index: 3; display: grid; place-items: center; padding: 16px;
+    background: radial-gradient(circle at center, rgba(var(--deep-rgb), 0.55), rgba(var(--bg-rgb), 0.85));
+  }
+  .card {
+    max-width: 380px; width: 100%; text-align: center; display: flex; flex-direction: column; gap: 14px;
+    padding: 28px 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  }
+  .card h2 { margin: 0; font-family: var(--display); font-size: 30px; letter-spacing: 0.08em; color: var(--sprout); text-wrap: balance; }
+  .card p { margin: 0; color: var(--dim); }
+  .card .res { font-family: var(--mono); color: var(--dew); font-variant-numeric: tabular-nums; }
+  .card .boom { color: var(--ember); }
+  #timeBox.warn b { color: var(--ember); }
+  #timeBox.danger b { color: #FF5A4A; animation: pulse .5s ease-in-out infinite alternate; }
+  @keyframes pulse { to { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { #timeBox.danger b { animation: none; } }
+  .card button { align-self: center; background: var(--sprout); color: var(--forest); border-color: var(--sprout); font-weight: 700; }
+
+  @media (hover: none), (max-width: 700px) {
+    .pad { display: grid; }
+    .hint { display: none; }
+  }
+  @media (max-width: 480px) {
+    .stats { gap: 12px; padding: 8px 12px; }
+    .stats b { font-size: 17px; }
+  }
+</style>
+
+<canvas id="c" aria-label="粒子迷宮森林遊戲畫面"></canvas>
+
+<div class="hud">
+  <div class="brand">
+    <div class="eyebrow" id="lvl">第 1 座森林</div>
+    <h1>粒子迷宮森林</h1>
+  </div>
+  <div class="stats" aria-live="polite">
+    <div><span>步數</span><b id="steps">0</b></div>
+    <div id="timeBox"><span>剩餘</span><b id="time">30</b></div>
+    <div><span>煙火</span><b id="fw">0</b></div>
+    <div><span>動物</span><b id="left">0</b></div>
+  </div>
+</div>
+
+<div class="bar">
+  <button id="btnFire" class="fire" type="button">煙火模式</button>
+  <button id="btnStyle" class="fire" type="button">花式：隨機</button>
+  <button id="btnNew" type="button">換一座森林</button>
+  <button id="btnFog" type="button" aria-pressed="true">螢火模式</button>
+  <button id="btnSound" type="button" aria-pressed="true">聲音：開</button>
+  <div class="hint">方向鍵或 <kbd>WASD</kbd> 移動，點擊小徑自動前往，限時 30 秒，路上有柴犬、波斯貓、毛毛蟲擋路，出口有大橘貓守著，靠近後按 <kbd>F</kbd> 或空白鍵放煙火把牠嚇跑，<kbd>Q</kbd> 換花式。<kbd>R</kbd> 換森林、<kbd>L</kbd> 切換螢火、<kbd>M</kbd> 聲音。</div>
+</div>
+
+<div class="pad" aria-label="方向鍵">
+  <button class="u" type="button" data-d="0,-1" aria-label="上">▲</button>
+  <button class="l" type="button" data-d="-1,0" aria-label="左">◀</button>
+  <button class="r" type="button" data-d="1,0" aria-label="右">▶</button>
+  <button class="d" type="button" data-d="0,1" aria-label="下">▼</button>
+  <button class="f fire" type="button" id="padFire" aria-label="煙火模式">煙火</button>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<div class="win" id="lose" hidden>
+  <div class="card">
+    <h2 class="boom">光點爆炸了</h2>
+    <p>30 秒內沒有走出森林，螢火撐不住就炸開了。</p>
+    <button id="btnRetry" type="button">再試一次</button>
+  </div>
+</div>
+
+<div class="win" id="win" hidden>
+  <div class="card">
+    <h2>嚇跑所有動物，走出森林了</h2>
+    <p class="res" id="res"></p>
+    <p id="nextMsg">下一座森林會更深、更密。</p>
+    <button id="btnNext" type="button">進入下一座森林</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = id => document.getElementById(id);
+  // 葉片色階：深綠 → 淺綠
+  // 每座森林換一套色：翠綠 → 湛藍 → 粉櫻 → 金黃 → 紫霧，之後循環
+  const THEMES = [
+    { name: '翠綠', leaf: ['#2E8A52','#3FA462','#57BD72','#7DD88A','#A8F097','#DDFFCC'], bg: '#07170F', wall: '#123F28', path: '#020805',
+      acc: '166,232,143', light: '227,247,214', dim: '#86A994', core: '#F4FFEC', fly: '#C9F5B4', deep: '15,51,34', bgr: '7,23,15', fog: '2,8,5' },
+    { name: '湛藍', leaf: ['#1F5FA8','#2C7AC4','#3F95DB','#65B3EE','#9DD2FA','#DCF0FF'], bg: '#06101F', wall: '#12305A', path: '#02060D',
+      acc: '140,200,255', light: '224,240,255', dim: '#8499B3', core: '#F2F9FF', fly: '#B8DEFF', deep: '14,36,70', bgr: '6,16,31', fog: '2,5,12' },
+    { name: '粉櫻', leaf: ['#A8336E','#C2447F','#DA5C95','#EC82AE','#F7AECB','#FFE0EC'], bg: '#1C0714', wall: '#4A1535', path: '#0B0208',
+      acc: '255,160,200', light: '255,230,240', dim: '#B78AA0', core: '#FFF4F8', fly: '#FFC4DC', deep: '66,18,46', bgr: '28,7,20', fog: '10,2,7' },
+    { name: '金黃', leaf: ['#9A7412','#B88C1A','#D2A628','#E8C24A','#F5DC7E','#FFF4C4'], bg: '#161104', wall: '#3F3009', path: '#070501',
+      acc: '255,222,110', light: '255,246,214', dim: '#B3A57A', core: '#FFFBEA', fly: '#FFE89A', deep: '60,45,10', bgr: '22,17,4', fog: '8,6,1' },
+    { name: '紫霧', leaf: ['#5A2FA0','#6E3FBB','#8656D4','#A57BE8','#C7A8F6','#EDE0FF'], bg: '#0F0820', wall: '#2E1A55', path: '#05020C',
+      acc: '196,160,255', light: '239,230,255', dim: '#9B8CB8', core: '#F8F4FF', fly: '#D4C0FF', deep: '44,24,82', bgr: '15,8,32', fog: '5,2,12' },
+  ];
+  let themeIdx = 0, TH = THEMES[0], LEAF = TH.leaf;   // 換森林或過關都換色系
+
+  // ---------- 聲音：全部用 Web Audio 合成 ----------
+  const SFX = (() => {
+    let ac = null, master, music, fx, noiseBuf, on = true, nextT = 0, beat = 0, stepIdx = 0, timer = null;
+    // 每座森林一組五聲音階（Hz 根音 × 比例）
+    const ROOTS = [220, 246.94, 261.63, 196, 233.08];
+    const PENTA = [1, 9/8, 5/4, 3/2, 5/3, 2, 9/4, 5/2];
+    const WALK = [0, 2, 4, 2, 3, 5, 4, 2, 1, 3, 5, 7, 6, 4, 3, 0];          // 走路時一步一音的小旋律
+    const root = () => ROOTS[themeIdx % ROOTS.length];
+    function init() {
+      if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+      const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+      ac = new C(); master = ac.createGain(); master.gain.value = on ? 0.9 : 0; master.connect(ac.destination);
+      music = ac.createGain(); music.gain.value = 0.35; music.connect(master);
+      fx = ac.createGain(); fx.gain.value = 0.8; fx.connect(master);
+      noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+      const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      nextT = ac.currentTime + 0.1; timer = setInterval(schedule, 120);
+    }
+    function tone(f, t, dur, vol, type = 'sine', dest = music, glideTo) {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = type; o.frequency.setValueAtTime(f, t);
+      if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, t + dur);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + 0.05);
+    }
+    function noise(t, dur, vol, fType, f0, f1, q = 1) {
+      const src = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+      src.buffer = noiseBuf; fl.type = fType; fl.Q.value = q;
+      fl.frequency.setValueAtTime(f0, t); if (f1) fl.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(fl); fl.connect(g); g.connect(fx); src.start(t, Math.random()); src.stop(t + dur + 0.05);
+    }
+    // 背景配樂：低音長音 + 輕柔的五聲音階琶音，節奏 0.4 秒一拍
+    function schedule() {
+      if (!ac || !on) return;
+      while (nextT < ac.currentTime + 0.5) {
+        const r = root(), bar = Math.floor(beat / 8) % 4, chord = [0, 3, 4, 2][bar];
+        if (beat % 8 === 0) tone(r / 2 * PENTA[chord], nextT, 3.4, 0.09, 'triangle');
+        if (beat % 2 === 0 || Math.random() < 0.35) {
+          const n = PENTA[(chord + [0, 2, 4, 5, 2, 4, 6, 4][beat % 8]) % PENTA.length];
+          tone(r * 2 * n, nextT, 0.9, 0.035, 'sine');
+        }
+        beat++; nextT += 0.4;
+      }
+    }
+    return {
+      init,
+      toggle() { on = !on; if (ac) master.gain.setTargetAtTime(on ? 0.9 : 0, ac.currentTime, 0.05); return on; },
+      step() {                                           // 走一步：小聲的木琴音，連起來是一段旋律
+        if (!ac || !on) return;
+        const t = ac.currentTime, n = PENTA[WALK[stepIdx++ % WALK.length]];
+        tone(root() * 2 * n, t, 0.22, 0.05, 'triangle', fx);
+        tone(root() * 4 * n, t, 0.12, 0.012, 'sine', fx);
+      },
+      tick(sec) { if (ac && on) tone(sec <= 2 ? 1320 : 990, ac.currentTime, 0.09, 0.08, 'square', fx); },
+      bump() { if (ac && on) tone(140, ac.currentTime, 0.12, 0.05, 'sine', fx, 90); },
+      launch() { if (ac && on) { const t = ac.currentTime; tone(500, t, 0.5, 0.05, 'sine', fx, 1600); noise(t, 0.5, 0.05, 'bandpass', 800, 3000, 3); } },
+      boom(type) {
+        if (!ac || !on) return;
+        const t = ac.currentTime;
+        noise(t, 1.2, 0.7, 'lowpass', 900, 60);            // 主爆
+        tone(90, t, 0.6, 0.35, 'sine', fx, 40);
+        if (type === '槓上開花') { for (let k = 0; k < 16; k++) noise(t + 0.45 + Math.random() * 0.5, 0.06, 0.25, 'highpass', 3000); }
+        else if (type === '龍捲風') noise(t, 2.2, 0.25, 'bandpass', 300, 2500, 4);   // 呼嘯
+        else if (type === '斗笠') for (let k = 0; k < 10; k++) noise(t + 0.3 + k * 0.08, 0.2, 0.08, 'bandpass', 1800 + k * 150, 0, 6);
+        else for (let k = 0; k < 24; k++) noise(t + 0.2 + Math.random() * 0.9, 0.04, 0.18, 'highpass', 2500); // 劈啪
+      },
+      voice(kind, scared) {
+        if (!ac || !on) return;
+        const t = ac.currentTime;
+        if (kind === 'cat') return this.meow(scared);
+        if (kind === 'persian') return scared ? noise(t, 0.7, 0.35, 'highpass', 2500, 4000) : this.meow(false, 380, 1.0);
+        if (kind === 'shiba') {                           // 汪：短促方波 + 噪音
+          const n = scared ? 3 : 1;
+          for (let k = 0; k < n; k++) {
+            const s0 = t + k * 0.16, f = scared ? 520 : 380;
+            tone(f, s0, 0.13, 0.12, 'square', fx, f * 0.6); noise(s0, 0.1, 0.12, 'bandpass', 900, 500, 2);
+          }
+          return;
+        }
+        if (kind === 'worm') {                            // 毛毛蟲：吱吱；變身時是一串上升的亮音
+          if (scared) { [0, 2, 4, 5, 7, 9].forEach((i, k) => tone(880 * Math.pow(2, i / 12), t + k * 0.06, 0.25, 0.05, 'sine', fx)); }
+          else { tone(1300, t, 0.08, 0.04, 'sine', fx, 1900); tone(1400, t + 0.12, 0.08, 0.04, 'sine', fx, 2000); }
+        }
+      },
+      meow(scared, baseF, len) {                                     // 貓叫：鋸齒波 + 共振濾波模擬口腔
+        if (!ac || !on) return;
+        const t = ac.currentTime, o = ac.createOscillator(), f1 = ac.createBiquadFilter(), f2 = ac.createBiquadFilter(), g = ac.createGain();
+        const base = baseF || (scared ? 780 : 520), dur = len || (scared ? 0.55 : 0.7);
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(base * 0.8, t);
+        o.frequency.exponentialRampToValueAtTime(base * (scared ? 1.7 : 1.35), t + dur * 0.35);
+        o.frequency.exponentialRampToValueAtTime(base * 0.75, t + dur);
+        f1.type = 'bandpass'; f1.Q.value = 5; f1.frequency.setValueAtTime(700, t); f1.frequency.linearRampToValueAtTime(1500, t + dur * 0.4); f1.frequency.linearRampToValueAtTime(800, t + dur);
+        f2.type = 'bandpass'; f2.Q.value = 8; f2.frequency.value = 2600;
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(scared ? 0.5 : 0.28, t + 0.06);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(f1); o.connect(f2); f1.connect(g); f2.connect(g); g.connect(fx); o.start(t); o.stop(t + dur + 0.05);
+      },
+      win() { if (!ac || !on) return; const t = ac.currentTime, r = root();
+        [0, 2, 4, 5, 7].forEach((i, k) => tone(r * 2 * PENTA[i], t + k * 0.12, 0.5, 0.08, 'triangle', fx)); },
+    };
+  })();
+  const wake = () => SFX.init();
+  addEventListener('pointerdown', wake); addEventListener('keydown', wake);
+  const A = (rgb, a) => `rgba(${rgb},${a})`;
+  function applyTheme() {
+    TH = THEMES[themeIdx % THEMES.length]; LEAF = TH.leaf;
+    const st = document.documentElement.style;
+    st.setProperty('--forest', TH.bg); st.setProperty('--sprout', `rgb(${TH.acc})`);
+    st.setProperty('--dew', `rgb(${TH.light})`); st.setProperty('--dim', TH.dim);
+    st.setProperty('--acc-rgb', TH.acc); st.setProperty('--bg-rgb', TH.bgr); st.setProperty('--deep-rgb', TH.deep);
+  }
+  const bg = document.createElement('canvas'), bgx = bg.getContext('2d');
+
+  let W, H, DPR, T, gw, gh, ox, oy, grid, level = 1;
+  let P = { buf: null, n: 0 };            // 牆面粒子：hx,hy,x,y,vx,vy,phase,size,color
+  let player, exitT, route = [], steps = 0, t0 = 0, won = false, fog = true;
+  let motes = [], flies = [], held = null, mouse = { x: -999, y: -999 };
+  let ready = false, lastW = 0, lastH = 0;
+  const STYLES = ['隨機', '牡丹', '槓上開花', '龍捲風', '斗笠'];
+  let styleIdx = 0, labels = [];
+  const LIMIT = 30; let dead = false, lastTick = 0;
+  let rockets = [], sparks = [], fwUsed = 0, lastFire = 0, toastT = 0;
+  const RANGE = 4.5;                       // 煙火有效距離（格）
+  const SPARK = () => ['#FF9A3C', '#FFC27A', `rgb(${TH.acc})`, TH.leaf[5], '#FFE36B'];
+
+  // ---------- 迷宮生成（回溯法 + 少量打通，森林小徑會有環） ----------
+  function makeMaze(w, h) {
+    const g = new Uint8Array(w * h).fill(1);
+    const st = [[1, 1]]; g[w + 1] = 0;
+    while (st.length) {
+      const [x, y] = st[st.length - 1];
+      const nb = [[2,0],[-2,0],[0,2],[0,-2]].map(([dx,dy]) => [x+dx, y+dy, dx, dy])
+        .filter(([nx,ny]) => nx > 0 && ny > 0 && nx < w-1 && ny < h-1 && g[ny*w+nx]);
+      if (!nb.length) { st.pop(); continue; }
+      const [nx, ny, dx, dy] = nb[(Math.random() * nb.length) | 0];
+      g[(y + dy/2) * w + x + dx/2] = 0; g[ny * w + nx] = 0; st.push([nx, ny]);
+    }
+    const loops = Math.max(0, 0.025 - (level - 1) * 0.009);
+    for (let k = 0; k < w * h * loops; k++) {
+      const x = 1 + ((Math.random() * (w - 2)) | 0), y = 1 + ((Math.random() * (h - 2)) | 0);
+      if (g[y*w+x] && ((g[y*w+x-1] === 0 && g[y*w+x+1] === 0) || (g[(y-1)*w+x] === 0 && g[(y+1)*w+x] === 0))) g[y*w+x] = 0;
+    }
+    return g;
+  }
+  const odd = n => (n % 2 ? n : n - 1);
+  function openExit(c) {                           // 在緊鄰的外牆打開缺口，缺口本身就是出口格
+    const opts = [];
+    if (c.x === gw - 2) opts.push([1, 0]); if (c.y === gh - 2) opts.push([0, 1]);
+    if (c.x === 1) opts.push([-1, 0]); if (c.y === 1) opts.push([0, -1]);
+    const [dx, dy] = opts[0];
+    const e = { x: c.x + dx, y: c.y + dy, dx, dy };
+    grid[e.y * gw + e.x] = 0;
+    return e;
+  }
+  function farthestEdge(sx, sy) {                   // 外圈小徑格中，離起點最遠的一格
+    const dist = new Int32Array(gw * gh).fill(-1), q = [sy * gw + sx]; dist[q[0]] = 0; let best = -1;
+    for (let h = 0; h < q.length; h++) {
+      const c = q[h], x = c % gw, y = (c / gw) | 0;
+      const edge = x === 1 || y === 1 || x === gw - 2 || y === gh - 2;
+      if (edge && (x > 3 || y > 3) && (best < 0 || dist[c] > dist[best])) best = c;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy, ni = ny * gw + nx;
+        if (nx > 0 && ny > 0 && nx < gw - 1 && ny < gh - 1 && grid[ni] === 0 && dist[ni] < 0) { dist[ni] = dist[c] + 1; q.push(ni); }
+      }
+    }
+    return best < 0 ? { x: gw - 2, y: gh - 2 } : { x: best % gw, y: (best / gw) | 0 };
+  }
+  function farthest(sx, sy) {                       // BFS 找最遠的小徑格
+    const dist = new Int32Array(gw * gh).fill(-1), q = [sy * gw + sx]; dist[q[0]] = 0; let best = q[0];
+    for (let h = 0; h < q.length; h++) {
+      const c = q[h], x = c % gw, y = (c / gw) | 0;
+      if (dist[c] > dist[best]) best = c;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy, ni = ny * gw + nx;
+        if (nx > 0 && ny > 0 && nx < gw - 1 && ny < gh - 1 && grid[ni] === 0 && dist[ni] < 0) { dist[ni] = dist[c] + 1; q.push(ni); }
+      }
+    }
+    return { x: best % gw, y: (best / gw) | 0 };
+  }
+  const wall = (x, y) => x < 0 || y < 0 || x >= gw || y >= gh || grid[y * gw + x] === 1;
+  const cx = x => ox + (x + 0.5) * T, cy = y => oy + (y + 0.5) * T;
+
+  function build() {
+    applyTheme();
+    DPR = Math.min(devicePixelRatio || 1, 2);
+    W = cv.clientWidth || innerWidth; H = cv.clientHeight || innerHeight;
+    if (W < 120 || H < 200) { ready = false; return; }   // 框架尚未有尺寸，等 ResizeObserver 再建
+    cv.width = bg.width = Math.round(W * DPR); cv.height = bg.height = Math.round(H * DPR);
+    const small = W < 700;
+    T = Math.max(small ? 13 : 15, Math.round((small ? 30 : 42) * Math.pow(0.82, level - 1)));
+    const hudB = document.querySelector('.hud').getBoundingClientRect().bottom;
+    const pad = document.querySelector('.pad'), padOn = getComputedStyle(pad).display !== 'none';
+    const barT = document.querySelector('.bar').getBoundingClientRect().top;
+    const lowT = padOn ? Math.min(barT, pad.getBoundingClientRect().top) : barT;
+    const top = Math.max(small ? 96 : 92, hudB + 10), bottom = Math.max(64, H - lowT + 10);
+    gw = Math.max(9, odd(Math.floor((W - 24) / T)));
+    gh = Math.max(9, odd(Math.floor((H - top - bottom) / T)));
+    ox = (W - gw * T) / 2; oy = top + (H - top - bottom - gh * T) / 2;
+    grid = makeMaze(gw, gh);
+    exitT = openExit(level > 1 ? farthestEdge(1, 1) : { x: gw - 2, y: gh - 2 });
+    player = { x: 1, y: 1, fx: 1, fy: 1 };
+    route = []; steps = 0; t0 = performance.now(); won = false; dead = false; lastTick = LIMIT;
+    $('lose').hidden = true; $('timeBox').className = ''; $('time').textContent = LIMIT;
+    rockets = []; sparks = []; labels = []; fwUsed = 0; $('fw').textContent = 0; makeCritters();
+    $('win').hidden = true;
+    $('lvl').textContent = `第 ${level} 座森林 · ${TH.name} · ${(gw - 1) / 2}×${(gh - 1) / 2}`;
+    $('nextMsg').textContent = `下一座是${THEMES[(themeIdx + 1) % THEMES.length].name}森林，會更深、更密。`;
+    makeLeaves(); paintGround(); makeFlies();
+    ready = true; lastW = W; lastH = H;
+  }
+
+  // 每一格樹牆撒一團高斯分布的葉片粒子，中心偏深、邊緣偏亮
+  function makeLeaves() {
+    let walls = 0; for (let i = 0; i < grid.length; i++) walls += grid[i];
+    const cap = W < 700 ? 6000 : 14000;
+    const per = Math.max(4, Math.min(Math.round(T * T / 48), Math.floor(cap / walls)));
+    const n = walls * per, b = new Float32Array(n * 9);
+    let i = 0;
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+      if (!grid[y * gw + x]) continue;
+      const edge = !wall(x-1,y) || !wall(x+1,y) || !wall(x,y-1) || !wall(x,y+1);
+      for (let k = 0; k < per; k++, i++) {
+        const gx = (Math.random() + Math.random() + Math.random() - 1.5) * 0.9;
+        const gy = (Math.random() + Math.random() + Math.random() - 1.5) * 0.9;
+        const hx = cx(x) + gx * T * 0.75, hy = cy(y) + gy * T * 0.75;
+        const r = Math.hypot(gx, gy);
+        let c = Math.min(5, Math.floor(r * 2.2 + Math.random() * 2.2 + (edge ? 1 : 0)));
+        if (Math.random() < 0.05) c = 5;
+        const o = i * 9;
+        b[o] = hx; b[o+1] = hy; b[o+2] = hx; b[o+3] = hy; b[o+4] = 0; b[o+5] = 0;
+        b[o+6] = Math.random() * 6.283; b[o+7] = 1.6 + Math.random() * (T / 11); b[o+8] = c;
+      }
+    }
+    P = { buf: b, n };
+  }
+
+  // 地面：深綠小徑 + 苔蘚斑點，只畫一次
+  function paintGround() {
+    bgx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    bgx.fillStyle = TH.bg; bgx.fillRect(0, 0, W, H);
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+      if (!grid[y * gw + x]) continue;               // 樹牆底色：深綠
+      bgx.fillStyle = TH.wall;
+      bgx.fillRect(ox + x * T - 0.5, oy + y * T - 0.5, T + 1, T + 1);
+    }
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+      if (grid[y * gw + x]) continue;               // 小徑：近黑，與樹牆拉開反差
+      bgx.fillStyle = TH.path;
+      bgx.fillRect(ox + x * T, oy + y * T, T, T);
+      for (let k = 0; k < 3; k++) {
+        bgx.fillStyle = A(TH.acc, 0.08 + Math.random() * 0.1);
+        bgx.fillRect(ox + (x + Math.random()) * T, oy + (y + Math.random()) * T, 1.2, 1.2);
+      }
+    }
+  }
+
+  function makeFlies() {
+    flies = Array.from({ length: W < 700 ? 30 : 60 }, () => ({
+      x: Math.random() * W, y: Math.random() * H, a: Math.random() * 6.283, s: 0.2 + Math.random() * 0.5, p: Math.random() * 6.283
+    }));
+  }
+
+  // ---------- 移動 ----------
+  function tryStep(dx, dy) {
+    if (!ready || won || dead || player.x !== player.fx || player.y !== player.fy) return false;
+    const nx = player.x + dx, ny = player.y + dy;
+    if (wall(nx, ny)) return false;
+    const blk = blocker(nx, ny);
+    if (blk) {
+      const now = performance.now();
+      if (now - blk.bump > 1200) { blk.bump = now; toast(`${KIND[blk.kind].name}擋住${blk.kind === 'cat' ? '出口' : '路'}了，按 F 放煙火嚇跑牠`); SFX.voice(blk.kind, false); }
+      return false;
+    }
+    player.x = nx; player.y = ny; steps++; SFX.step();
+    $('steps').textContent = steps;
+    return true;
+  }
+  function bfs(tx, ty) {
+    const prev = new Int32Array(gw * gh).fill(-1), q = [player.y * gw + player.x];
+    prev[q[0]] = q[0];
+    for (let h = 0; h < q.length; h++) {
+      const c = q[h], x = c % gw, y = (c / gw) | 0;
+      if (x === tx && y === ty) break;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy, ni = ny * gw + nx;
+        if (!wall(nx, ny) && prev[ni] < 0) { prev[ni] = c; q.push(ni); }
+      }
+    }
+    const end = ty * gw + tx; if (prev[end] < 0) return [];
+    const path = []; for (let c = end; c !== prev[c]; c = prev[c]) path.push([c % gw, (c / gw) | 0]);
+    return path.reverse();
+  }
+
+  addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    const map = { arrowup: [0,-1], w: [0,-1], arrowdown: [0,1], s: [0,1], arrowleft: [-1,0], a: [-1,0], arrowright: [1,0], d: [1,0] };
+    if (map[k]) { held = map[k]; route = []; e.preventDefault(); }
+    else if (k === 'f' || k === ' ') { fire(); e.preventDefault(); }
+    else if (k === 'q') cycleStyle();
+    else if (k === 'm') toggleSound();
+    else if (k === 'r') newForest();
+    else if (k === 'l') toggleFog();
+    else if (k === 'enter' && won) next();
+    else if (k === 'enter' && dead) build();
+  });
+  addEventListener('keyup', e => {
+    const k = e.key.toLowerCase();
+    if (['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d'].includes(k)) held = null;
+  });
+
+  let touch0 = null;
+  cv.addEventListener('pointermove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+  cv.addEventListener('pointerleave', () => { mouse.x = mouse.y = -999; });
+  cv.addEventListener('pointerdown', e => { touch0 = { x: e.clientX, y: e.clientY }; mouse.x = e.clientX; mouse.y = e.clientY; });
+  cv.addEventListener('pointerup', e => {
+    if (!touch0 || won) return;
+    const dx = e.clientX - touch0.x, dy = e.clientY - touch0.y; touch0 = null;
+    if (Math.hypot(dx, dy) > 30) {                 // 滑動：往該方向一路走到岔路
+      const d = Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
+      const path = []; let x = player.x, y = player.y;
+      while (!wall(x + d[0], y + d[1])) {
+        x += d[0]; y += d[1]; path.push([x, y]);
+        const side = d[0] ? [[0,1],[0,-1]] : [[1,0],[-1,0]];
+        if (side.some(([sx, sy]) => !wall(x + sx, y + sy))) break;
+      }
+      route = path; return;
+    }
+    const tx = Math.floor((e.clientX - ox) / T), ty = Math.floor((e.clientY - oy) / T);
+    if (!wall(tx, ty)) route = bfs(tx, ty);
+  });
+  document.querySelectorAll('.pad button[data-d]').forEach(b => {
+    const d = b.dataset.d.split(',').map(Number);
+    b.addEventListener('pointerdown', e => { e.preventDefault(); held = d; route = []; });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => { held = null; }));
+  });
+
+  $('btnFire').addEventListener('click', fire);
+  function cycleStyle() { styleIdx = (styleIdx + 1) % STYLES.length; $('btnStyle').textContent = `花式：${STYLES[styleIdx]}`; }
+  $('btnStyle').addEventListener('click', cycleStyle);
+  function toggleSound() { SFX.init(); const on = SFX.toggle(); const b = $('btnSound'); b.setAttribute('aria-pressed', on); b.textContent = on ? '聲音：開' : '聲音：關'; }
+  $('btnSound').addEventListener('click', toggleSound);
+  $('padFire').addEventListener('pointerdown', e => { e.preventDefault(); fire(); });
+
+  function toast(msg) {
+    const el = $('toast'); el.textContent = msg; el.hidden = false; toastT = performance.now();
+    clearTimeout(toast.h); toast.h = setTimeout(() => { el.hidden = true; }, 2200);
+  }
+
+  // ---------- 森林動物：全部由粒子組成 ----------
+  const KIND = {
+    cat:     { name: '大橘貓', say: '喵～',   shout: '喵！！',   glow: '255,154,60',  gone: '大橘貓跑走了，出口打開' },
+    shiba:   { name: '柴犬',   say: '汪！',   shout: '汪汪汪！', glow: '227,154,75',  gone: '柴犬夾著尾巴跑走了，路通了' },
+    persian: { name: '波斯貓', say: '喵嗚～', shout: '嘶──！',   glow: '240,232,224', gone: '波斯貓甩著蓬毛逃走了，路通了' },
+    worm:    { name: '毛毛蟲', say: '蠕蠕',   shout: '變身！',   glow: '150,230,110', gone: '毛毛蟲變成蝴蝶飛走了，路通了' },
+  };
+  const inE = (x, y, cx0, cy0, rx, ry) => ((x - cx0) / rx) ** 2 + ((y - cy0) / ry) ** 2 <= 1;
+  const inTri = (x, y, a, b, c) => {
+    const d = (p, q, r) => (p[0] - r[0]) * (q[1] - r[1]) - (q[0] - r[0]) * (p[1] - r[1]);
+    const d1 = d([x, y], a, b), d2 = d([x, y], b, c), d3 = d([x, y], c, a);
+    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+  };
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  // 在單位方框內亂數取點，fn 回傳 [顏色, 部位] 或 null
+  function sample(n, fn) {
+    const pts = []; let g = 0;
+    while (pts.length < n && g++ < n * 60) {
+      const x = rnd(-0.95, 0.95), y = rnd(-0.9, 0.8), r = fn(x, y);
+      if (r) pts.push({ x, y, c: r[0], part: r[1], j: Math.random() * 6.283 });
+    }
+    return pts;
+  }
+  const blob = (pts, cx0, cy0, rx, ry, c, part, n) => {   // 小色塊（眼睛、鼻子）
+    for (let k = 0; k < n; k++) { const a = Math.random() * 6.283, r = Math.sqrt(Math.random());
+      pts.push({ x: cx0 + Math.cos(a) * r * rx, y: cy0 + Math.sin(a) * r * ry, c, part, j: 0 }); }
+  };
+  const SHAPES = {
+    cat(n) {
+      const pts = sample(n, (x, y) => {
+        let part = -1;
+        if (inE(x, y, 0, 0.25, 0.44, 0.4)) part = 0;
+        else if (inE(x, y, 0, -0.26, 0.3, 0.27)) part = 1;
+        else if (inTri(x, y, [-0.29, -0.36], [-0.24, -0.66], [-0.05, -0.47]) || inTri(x, y, [0.29, -0.36], [0.24, -0.66], [0.05, -0.47])) part = 2;
+        else { const a = Math.atan2(y - 0.35, x - 0.42), r = Math.hypot(x - 0.42, y - 0.35);
+          if (a > -1.9 && a < 0.9 && Math.abs(r - 0.28) < 0.055 && x > 0.42) part = 3; }
+        if (part < 0) return null;
+        let c = '#FF9A3C';
+        if (part === 2 && (inTri(x, y, [-0.25, -0.43], [-0.23, -0.6], [-0.11, -0.47]) || inTri(x, y, [0.25, -0.43], [0.23, -0.6], [0.11, -0.47]))) c = '#FFB3A0';
+        else if (inE(x, y, 0, 0.3, 0.2, 0.28) || inE(x, y, 0, -0.14, 0.13, 0.08)) c = '#FFE9CF';
+        else if (Math.sin((y + (part === 3 ? x : 0)) * 28) > 0.55) c = '#D9661A';
+        else if (Math.random() < 0.25) c = '#FFC27A';
+        return [c, part];
+      });
+      blob(pts, -0.11, -0.29, 0.05, 0.035, '#B8FF8A', 4, 14); blob(pts, 0.11, -0.29, 0.05, 0.035, '#B8FF8A', 4, 14);
+      blob(pts, 0, -0.18, 0.025, 0.012, '#FF7A8A', 5, 6);
+      return pts;
+    },
+    shiba(n) {                                          // 坐著的柴犬：尖耳、白色臉頰與胸口、捲尾巴
+      const pts = sample(n, (x, y) => {
+        let part = -1;
+        if (inE(x, y, 0, 0.3, 0.36, 0.33)) part = 0;
+        else if (inE(x, y, 0, -0.2, 0.31, 0.26)) part = 1;
+        else if (inTri(x, y, [-0.3, -0.26], [-0.22, -0.62], [-0.05, -0.4]) || inTri(x, y, [0.3, -0.26], [0.22, -0.62], [0.05, -0.4])) part = 2;
+        else if (Math.abs(Math.hypot(x - 0.4, y - 0.08) - 0.13) < 0.05 && x > 0.3) part = 3;
+        if (part < 0) return null;
+        let c = Math.random() < 0.2 ? '#F0B06A' : '#E39A4B';
+        if (part === 2 && (inTri(x, y, [-0.26, -0.32], [-0.22, -0.52], [-0.1, -0.4]) || inTri(x, y, [0.26, -0.32], [0.22, -0.52], [0.1, -0.4]))) c = '#8A4B22';
+        else if (inE(x, y, 0, -0.1, 0.2, 0.13) || inE(x, y, 0, 0.33, 0.19, 0.26) || inE(x, y, -0.19, -0.13, 0.1, 0.08) || inE(x, y, 0.19, -0.13, 0.1, 0.08)
+          || inE(x, y, -0.11, -0.33, 0.04, 0.025) || inE(x, y, 0.11, -0.33, 0.04, 0.025) || (part === 3 && y > 0.1)) c = '#FFF1DC';
+        return [c, part];
+      });
+      blob(pts, -0.11, -0.23, 0.04, 0.035, '#1E120A', 4, 10); blob(pts, 0.11, -0.23, 0.04, 0.035, '#1E120A', 4, 10);
+      blob(pts, 0, -0.14, 0.045, 0.03, '#1E120A', 5, 10);
+      return pts;
+    },
+    persian(n) {                                        // 蓬鬆的波斯貓：圓臉、小耳朵、藍眼睛、大尾巴
+      const fluffy = (x, y, cx0, cy0, rx, ry) => inE(x, y, cx0, cy0, rx, ry) || (inE(x, y, cx0, cy0, rx * 1.14, ry * 1.14) && Math.random() < 0.3);
+      const pts = sample(n, (x, y) => {
+        let part = -1;
+        if (fluffy(x, y, 0, 0.22, 0.46, 0.4)) part = 0;
+        else if (fluffy(x, y, 0, -0.24, 0.35, 0.3)) part = 1;
+        else if (inTri(x, y, [-0.31, -0.4], [-0.28, -0.6], [-0.14, -0.5]) || inTri(x, y, [0.31, -0.4], [0.28, -0.6], [0.14, -0.5])) part = 2;
+        else if (fluffy(x, y, 0.52, 0.3, 0.14, 0.26)) part = 3;
+        if (part < 0) return null;
+        const edge = !inE(x, y, part === 3 ? 0.52 : 0, part === 1 ? -0.24 : part === 3 ? 0.3 : 0.22, part === 1 ? 0.28 : 0.38, part === 1 ? 0.24 : 0.33);
+        const c = Math.random() < (edge ? 0.45 : 0.12) ? '#CFC4B8' : Math.random() < 0.35 ? '#FFFFFF' : '#F4EEE6';
+        return [c, part];
+      });
+      blob(pts, -0.12, -0.25, 0.055, 0.05, '#5FB2FF', 4, 14); blob(pts, 0.12, -0.25, 0.055, 0.05, '#5FB2FF', 4, 14);
+      blob(pts, -0.12, -0.25, 0.015, 0.03, '#1A2330', 4, 4); blob(pts, 0.12, -0.25, 0.015, 0.03, '#1A2330', 4, 4);
+      blob(pts, 0, -0.17, 0.03, 0.018, '#E98A9A', 5, 6);
+      for (let k = 0; k < 8; k++) pts.push({ x: -0.06 + k * 0.017, y: -0.115 + Math.abs(k - 3.5) * 0.006, c: '#B89A94', part: 5, j: 0 });
+      return pts;
+    },
+    worm(n) {                                           // 毛毛蟲：六節綠身體、黃斑點、紅色頭與觸角
+      const segs = [0, 1, 2, 3, 4].map(i => [-0.6 + i * 0.22, 0.28]);
+      const pts = sample(n, (x, y) => {
+        for (let i = 0; i < segs.length; i++) if (inE(x, y, segs[i][0], segs[i][1], 0.14, 0.14)) {
+          const spot = inE(x, y, segs[i][0], segs[i][1] - 0.07, 0.045, 0.035);
+          return [spot ? '#FFD23F' : (i % 2 ? '#A9EE6C' : '#6FD04E'), 10 + i];
+        }
+        if (inE(x, y, 0.5, 0.12, 0.19, 0.18)) return [Math.random() < 0.2 ? '#FF8A7A' : '#E8574F', 15];
+        return null;
+      });
+      for (const ax of [0.44, 0.58]) for (let k = 0; k < 10; k++) {
+        const u = k / 9; pts.push({ x: ax + (ax - 0.51) * u * 1.4, y: -0.02 - u * 0.3, c: '#3B2A1A', part: 15, j: 0 });
+      }
+      blob(pts, 0.39, -0.33, 0.035, 0.035, '#FFD23F', 15, 6); blob(pts, 0.67, -0.33, 0.035, 0.035, '#FFD23F', 15, 6);
+      blob(pts, 0.45, 0.08, 0.04, 0.04, '#FFFFFF', 4, 8); blob(pts, 0.58, 0.08, 0.04, 0.04, '#FFFFFF', 4, 8);
+      blob(pts, 0.46, 0.09, 0.018, 0.018, '#1E120A', 4, 4); blob(pts, 0.59, 0.09, 0.018, 0.018, '#1E120A', 4, 4);
+      segs.forEach(([sx, sy], i) => { blob(pts, sx - 0.05, sy + 0.16, 0.015, 0.03, '#2E5A1E', 10 + i, 3); blob(pts, sx + 0.05, sy + 0.16, 0.015, 0.03, '#2E5A1E', 10 + i, 3); });
+      return pts;
+    },
+    butterfly(n) {                                      // 毛毛蟲被嚇到後變成的蝴蝶
+      return sample(n, (x, y) => {
+        if (inE(x, y, 0, 0.02, 0.045, 0.3)) return ['#3B2A1A', 20];
+        const up = inE(x, y, -0.3, -0.14, 0.3, 0.24) || inE(x, y, 0.3, -0.14, 0.3, 0.24);
+        const lo = inE(x, y, -0.2, 0.22, 0.19, 0.17) || inE(x, y, 0.2, 0.22, 0.19, 0.17);
+        if (!up && !lo) return null;
+        const r = Math.hypot(x, y);
+        return [r > 0.45 ? '#7FD6FF' : r > 0.3 ? '#FF8FD0' : '#FFD23F', 21];
+      });
+    },
+  };
+
+  let critters = [];
+  function makeCritter(kind, tx, ty) {
+    const small = W < 700, n = kind === 'cat' ? (small ? 520 : 820) : (small ? 260 : 380);
+    return { kind, tx, ty, pts: SHAPES[kind](n), alt: kind === 'worm' ? SHAPES.butterfly(n) : null,
+             x: cx(tx), y: cy(ty) - (kind === 'cat' ? T * 0.1 : 0), S: T * (kind === 'cat' ? 1.7 : 1.3),
+             vx: 0, vy: 0, state: 'sit', t: 0, talk: false, phase: Math.random() * 6.283, bump: 0 };
+  }
+  // 大橘貓守出口；其他動物擋在通往出口的正確路線上
+  function makeCritters() {
+    critters = [makeCritter('cat', exitT.x, exitT.y)];
+    const path = bfs(exitT.x, exitT.y), count = Math.min(2 + level, 7);
+    const kinds = ['shiba', 'persian', 'worm'].sort(() => Math.random() - 0.5);
+    while (kinds.length < count) kinds.push(pick(['shiba', 'persian', 'worm']));
+    const used = new Set();
+    for (let k = 0; k < count; k++) {
+      const i = Math.floor(path.length * (k + 1) / (count + 1));
+      if (i < 2 || i > path.length - 3 || used.has(i)) continue;
+      used.add(i); critters.push(makeCritter(kinds[k], path[i][0], path[i][1]));
+    }
+    updateLeft();
+  }
+  const blocker = (x, y) => critters.find(c => c.state !== 'gone' && c.tx === x && c.ty === y);
+  function updateLeft() { $('left').textContent = critters.filter(c => c.state !== 'gone').length; }
+
+  function scare(c) {
+    if (c.state !== 'sit') return;
+    c.state = 'scared'; c.t = 0;
+    setTimeout(() => SFX.voice(c.kind, true), 120);
+  }
+
+  // 出口大門：缺口兩側兩根發光門柱、「出口」字樣；守門的貓走了之後出現往外流的箭頭
+  function drawExitGate(t, top) {
+    const e = exitT, ex = cx(e.x), ey = cy(e.y), px = -e.dy, py = e.dx;  // p 為門柱排列方向（垂直於出口方向）
+    const catHere = critters.some(c => c.kind === 'cat' && c.state !== 'gone');
+    if (!top) {
+      for (const sgn of [-1, 1]) {
+        const bx = ex + px * sgn * T * 0.55, by = ey + py * sgn * T * 0.55;
+        for (let k = 0; k < 14; k++) {
+          const u = k / 13 - 0.5, fl = 0.6 + 0.4 * Math.sin(t * 4 + k);
+          ctx.fillStyle = A(TH.light, fl);
+          ctx.fillRect(bx + e.dx * u * T * 1.1 - 1.5, by + e.dy * u * T * 1.1 - 1.5, 3, 3);
+        }
+        const g2 = ctx.createRadialGradient(bx, by, 0, bx, by, T * 0.6);
+        g2.addColorStop(0, A(TH.acc, 0.45)); g2.addColorStop(1, A(TH.acc, 0));
+        ctx.fillStyle = g2; ctx.fillRect(bx - T, by - T, T * 2, T * 2);
+      }
+      return;
+    }
+    if (!catHere) {                                       // 往外流動的箭頭
+      ctx.strokeStyle = A(TH.light, 0.9); ctx.lineWidth = Math.max(2, T * 0.1); ctx.lineCap = 'round';
+      for (let k = 0; k < 3; k++) {
+        const u = ((t * 1.2 + k / 3) % 1) - 0.5, a = 1 - Math.abs(u) * 1.6;
+        const ax = ex + e.dx * u * T * 1.4, ay = ey + e.dy * u * T * 1.4, w = T * 0.22;
+        ctx.globalAlpha = Math.max(0, a);
+        ctx.beginPath();
+        ctx.moveTo(ax - e.dx * w + px * w, ay - e.dy * w + py * w); ctx.lineTo(ax, ay);
+        ctx.lineTo(ax - e.dx * w - px * w, ay - e.dy * w - py * w); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+    // 「出口」字樣放在門柱外側，避開動物頭上的對話
+    const fs = Math.max(12, T * 0.42);
+    ctx.font = `700 ${fs}px ${getComputedStyle(document.body).fontFamily}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const lx = e.dx ? ex - e.dx * T * 0.1 : ex + T * 1.35, ly = e.dx ? ey + T * 1.05 : ey - e.dy * T * 0.1;
+    ctx.fillStyle = A(TH.bgr, 0.8); const tw = ctx.measureText('出口').width + 10;
+    ctx.fillRect(lx - tw / 2, ly - fs * 0.7, tw, fs * 1.4);
+    ctx.fillStyle = `rgb(${TH.light})`; ctx.fillText('出口', lx, ly);
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  function drawCritter(c, t, dt) {
+    if (c.state === 'gone') return;
+    c.t += dt;
+    let scale = 1, jit = 0, hop = 0, pts = c.pts, flap = 1;
+    if (c.state === 'scared') {
+      scale = 1.25; jit = 0.05; hop = -Math.abs(Math.sin(c.t * 10)) * c.S * 0.35;
+      if (c.t > 0.7) {                                    // 往遠離玩家的方向逃
+        let dx = c.x - cx(player.fx), dy = c.y - cy(player.fy); const d = Math.hypot(dx, dy) || 1;
+        dx /= d; dy /= d; c.state = 'run'; c.t = 0;
+        if (c.kind === 'worm') { c.vx = dx * T * 3; c.vy = -T * 5; }
+        else { c.vx = dx * T * 9 + (c.kind === 'cat' ? T * 3 : 0); c.vy = dy * T * 9; }
+      }
+    } else if (c.state === 'run') {
+      c.x += c.vx * dt; c.y += c.vy * dt;
+      if (c.kind === 'worm') { pts = c.alt; flap = 0.25 + 0.75 * Math.abs(Math.sin(c.t * 14)); c.x += Math.sin(c.t * 5) * T * 0.06; }
+      else hop = -Math.abs(Math.sin(c.t * 12)) * c.S * 0.25;
+      if (Math.random() < 0.6) motes.push({ x: c.x, y: c.y + c.S * 0.3, vx: -c.vx / T * 0.1, vy: -Math.random() * .5, life: 1, c: `rgb(${KIND[c.kind].glow})` });
+      if (c.x < -c.S || c.x > W + c.S || c.y < -c.S || c.y > H + c.S) {
+        c.state = 'gone'; toast(KIND[c.kind].gone); updateLeft(); return;
+      }
+    }
+    const S = c.S * scale, tt = t + c.phase, blink = (tt % 4) < 0.12, breathe = 1 + Math.sin(tt * 2) * 0.02;
+    const sz = Math.max(1.3, c.S / 30);
+    const g = ctx.createRadialGradient(c.x, c.y + hop, 0, c.x, c.y + hop, S * 0.9);
+    g.addColorStop(0, A(KIND[c.kind].glow, 0.26)); g.addColorStop(1, A(KIND[c.kind].glow, 0));
+    ctx.fillStyle = g; ctx.fillRect(c.x - S, c.y + hop - S, S * 2, S * 2);
+    const sit = c.state === 'sit';
+    for (const p of pts) {
+      if (p.part === 4 && blink && sit) continue;
+      let x = p.x, y = p.y;
+      if (p.part === 21) x *= flap;
+      else if (sit && p.part === 3) {
+        const w = c.kind === 'shiba' ? Math.sin(tt * 9) * 0.05 : Math.sin(tt * 2.5) * 0.08 * (x - 0.42) / 0.3;
+        x += w; y -= w * 0.5;
+      } else if (p.part === 0) y = 0.25 + (y - 0.25) * breathe;
+      if (p.part >= 10 && p.part <= 15 && c.kind === 'worm') y += Math.sin(tt * 5 - (p.part - 10) * 0.9) * (sit ? 0.06 : 0.12);
+      if (jit) { x *= 1 + Math.sin(p.j + t * 40) * jit; y *= 1 + Math.cos(p.j + t * 37) * jit; }
+      ctx.fillStyle = p.c;
+      ctx.fillRect(c.x + x * S - sz / 2, c.y + hop + y * S - sz / 2, sz, sz);
+    }
+    if (c.state !== 'run' || c.t < 0.5) {
+      ctx.font = `700 ${Math.max(12, T * 0.45)}px ${getComputedStyle(document.body).fontFamily}`;
+      ctx.textAlign = 'center';
+      const talk = Math.sin(tt * 0.8) > 0.6;
+      if (sit && talk && !c.talk && Math.hypot(player.fx - c.tx, player.fy - c.ty) < 7) SFX.voice(c.kind, false);
+      c.talk = talk;
+      ctx.fillStyle = sit ? A(KIND[c.kind].glow, 0.9) : '#FFE36B';
+      const text = sit ? (talk ? KIND[c.kind].say : '') : KIND[c.kind].shout;
+      if (text) ctx.fillText(text, c.x, c.y + hop - S * 0.75);
+    }
+  }
+
+  // ---------- 煙火模式 ----------
+  function fire() {
+    const now = performance.now();
+    if (!ready || won || dead || now - lastFire < 450) return;
+    lastFire = now; fwUsed++; $('fw').textContent = fwUsed;
+    const sx = cx(player.fx), sy = cy(player.fy);
+    let tx, ty, hit = null, best = null, bd = Infinity;
+    for (const c of critters) if (c.state === 'sit') { const d = Math.hypot(c.x - sx, c.y - sy) / T; if (d < bd) { bd = d; best = c; } }
+    if (best && bd <= RANGE) { tx = best.x; ty = best.y - T * 0.6; hit = best; }
+    else if (best && bd < RANGE * 2.2) {
+      const k = RANGE / bd; tx = sx + (best.x - sx) * k; ty = sy + (best.y - sy) * k;
+      toast(`太遠了，再靠近${KIND[best.kind].name} ${Math.ceil(bd - RANGE)} 格左右`);
+    } else { tx = sx + (Math.random() - .5) * T * 4; ty = sy - T * (2.5 + Math.random() * 2); }
+    const type = styleIdx ? STYLES[styleIdx] : STYLES[1 + ((Math.random() * 4) | 0)];
+    rockets.push({ sx, sy, tx, ty, t: 0, dur: 0.55, hit, type }); SFX.launch();
+  }
+
+  const pick = arr => arr[(Math.random() * arr.length) | 0];
+  function explode(x, y, big, type) {
+    const sp = SPARK(), k0 = big ? 1.2 : 1, add = o => sparks.push(Object.assign({ x, y, vx: 0, vy: 0, life: 1, g: 0.05, fade: 0.016 }, o));
+    labels.push({ x, y: y - T * 1.4, text: type, life: 1 });
+    if (type === '牡丹') {                               // 圓形大球
+      for (let k = 0; k < 200 * k0; k++) {
+        const a = Math.random() * 6.283, v = (0.5 + Math.random() * 0.9) * 3.6 * k0;
+        add({ vx: Math.cos(a) * v, vy: Math.sin(a) * v, c: pick(sp) });
+      }
+    } else if (type === '槓上開花') {                    // 第一層炸開後，每顆火花再開一朵五瓣花
+      for (let k = 0; k < 14; k++) {
+        const a = k / 14 * 6.283, v = 3.4 * k0;
+        add({ vx: Math.cos(a) * v, vy: Math.sin(a) * v, c: '#FFE36B', split: true, fade: 0.02, g: 0.02 });
+      }
+    } else if (type === '龍捲風') {                      // 旋轉上升的漏斗
+      for (let k = 0; k < 220 * k0; k++) {
+        add({ spin: true, a: Math.random() * 6.283, h: Math.random() * T * 1.5, bx: x, by: y + T * 1.8,
+              w: 0.18 + Math.random() * 0.08, c: pick([`rgb(${TH.acc})`, TH.leaf[5], '#FFFFFF', '#FFC27A']), fade: 0.009 });
+      }
+    } else {                                             // 斗笠：尖頂、斜面、寬帽簷
+      const Rr = T * 2.6 * k0, H0 = Rr * 0.55;
+      for (let k = 0; k < 240 * k0; k++) {
+        const u = Math.random() * 2 - 1, onBrim = Math.random() < 0.35;
+        let tx, ty;
+        if (onBrim) { const a = Math.random() * 6.283; tx = Math.cos(a) * Rr * 1.15; ty = H0 + Math.sin(a) * Rr * 0.14; }
+        else { tx = u * Rr; ty = Math.abs(u) * H0 + (Math.random() - 0.5) * 3; }
+        add({ vx: tx / 25, vy: (ty - H0 * 0.35) / 25, g: 0.012, fade: 0.012, drag: 0.96,
+              c: onBrim ? pick(['#FFE36B', '#FFC27A', '#FF9A3C']) : pick(sp) });
+      }
+      for (let k = 0; k < 30; k++) add({ vx: (Math.random() - .5) * .3, vy: -2.4 - Math.random(), c: '#FFFFFF', fade: 0.03 }); // 帽尖
+    }
+    const b = P.buf, R = T * 3.2;                     // 爆炸震開附近葉片
+    for (let i = 0; i < P.n; i++) {
+      const o = i * 9, dx = b[o+2] - x, dy = b[o+3] - y, d = Math.hypot(dx, dy);
+      if (d < R && d > 0.1) { const f = (1 - d / R) * 14; b[o+4] += dx / d * f; b[o+5] += dy / d * f; }
+    }
+  }
+
+  function drawFireworks(dt) {
+    for (let k = rockets.length - 1; k >= 0; k--) {
+      const r = rockets[k]; r.t += dt;
+      const u = Math.min(1, r.t / r.dur), e = 1 - (1 - u) * (1 - u);
+      const x = r.sx + (r.tx - r.sx) * e, y = r.sy + (r.ty - r.sy) * e - Math.sin(u * Math.PI) * T * 1.2;
+      motes.push({ x, y, vx: (Math.random() - .5) * .6, vy: Math.random() * .6, life: 0.8, c: '#FFE36B' });
+      ctx.fillStyle = '#FFF6D8'; ctx.fillRect(x - 2, y - 2, 4, 4);
+      if (u >= 1) {
+        explode(x, y, !!r.hit, r.type); SFX.boom(r.type); rockets.splice(k, 1);
+        for (const c of critters) if (c === r.hit || Math.hypot(c.x - x, c.y - y) < T * 2) scare(c);
+      }
+    }
+    for (let k = sparks.length - 1; k >= 0; k--) {
+      const s = sparks[k];
+      if (s.spin) {                                        // 龍捲風：越高轉越寬
+        s.h += 1.3; s.a += s.w;
+        const r = 4 + s.h * 0.42;
+        s.x = s.bx + Math.cos(s.a) * r; s.y = s.by - s.h + Math.sin(s.a) * r * 0.22;
+      } else {
+        const d = s.drag || 0.96;
+        s.x += s.vx; s.y += s.vy; s.vx *= d; s.vy = s.vy * d + s.g;
+      }
+      s.life -= s.fade;
+      if (s.split && s.life < 0.55) {                      // 槓上開花：二次綻放
+        const pc = pick(['#FF7AB6', '#FFB3D9', '#FFE36B', `rgb(${TH.acc})`]), rot = Math.random() * 6.283;
+        for (let q = 0; q < 40; q++) {
+          const th = q / 40 * 6.283, r = Math.abs(Math.cos(2.5 * th)) * 1.9 + 0.25;
+          sparks.push({ x: s.x, y: s.y, vx: Math.cos(th + rot) * r, vy: Math.sin(th + rot) * r, life: 1, g: 0.02, fade: 0.022, c: q % 8 ? pc : '#FFFFFF' });
+        }
+        sparks.splice(k, 1); continue;
+      }
+      if (s.life <= 0) { sparks.splice(k, 1); continue; }
+      ctx.globalAlpha = s.life; ctx.fillStyle = s.c;
+      const z = 2 + s.life * 2.2; ctx.fillRect(s.x - z / 2, s.y - z / 2, z, z);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center'; ctx.font = `700 ${Math.max(14, T * 0.55)}px ${getComputedStyle(document.body).fontFamily}`;
+    for (let k = labels.length - 1; k >= 0; k--) {
+      const l = labels[k]; l.y -= 0.4; l.life -= 0.012;
+      if (l.life <= 0) { labels.splice(k, 1); continue; }
+      ctx.globalAlpha = Math.min(1, l.life * 1.5); ctx.fillStyle = '#FFE36B'; ctx.fillText(l.text, l.x, l.y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function toggleFog() { fog = !fog; $('btnFog').setAttribute('aria-pressed', fog); }
+  $('btnFog').addEventListener('click', toggleFog);
+  function newForest() { themeIdx++; build(); }
+  $('btnNew').addEventListener('click', newForest);
+  function next() { level++; themeIdx++; build(); }
+  $('btnNext').addEventListener('click', next);
+  $('btnRetry').addEventListener('click', build);
+  const rebuild = () => { clearTimeout(build.t); build.t = setTimeout(() => {
+    if (!ready || Math.abs(cv.clientWidth - lastW) > 40 || Math.abs(cv.clientHeight - lastH) > 80) build();
+  }, 200); };
+  new ResizeObserver(rebuild).observe(cv);
+  addEventListener('resize', rebuild);
+
+  function burst(x, y, n, spread) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * 6.283, s = Math.random() * spread;
+      motes.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 0.3, life: 1, c: LEAF[3 + ((Math.random() * 3) | 0)] });
+    }
+  }
+
+  function blowUp(x, y) {
+    dead = true; route = []; held = null;
+    for (let k = 0; k < 520; k++) {                   // 光點炸成一大圈
+      const a = Math.random() * 6.283, v = (0.3 + Math.random()) * 7;
+      sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, g: 0.04, fade: 0.01,
+                    c: pick(['#FF5A4A', '#FFE36B', '#FFFFFF', `rgb(${TH.acc})`, TH.leaf[5]]) });
+    }
+    const b = P.buf, Rr = T * 7;                       // 整片葉牆被震開
+    for (let i = 0; i < P.n; i++) {
+      const o = i * 9, dx = b[o+2] - x, dy = b[o+3] - y, d = Math.hypot(dx, dy);
+      if (d < Rr && d > 0.1) { const f = (1 - d / Rr) * 26; b[o+4] += dx / d * f; b[o+5] += dy / d * f; }
+    }
+    labels.push({ x, y: y - T * 1.4, text: '砰！', life: 1 });
+    SFX.boom('牡丹'); SFX.boom('槓上開花');
+    $('time').textContent = 0; $('timeBox').className = 'danger';
+    setTimeout(() => { $('lose').hidden = false; $('btnRetry').focus(); }, 1100);
+  }
+
+  function win() {
+    won = true; SFX.win();
+    const sec = Math.round((performance.now() - t0) / 1000);
+    burst(cx(exitT.x), cy(exitT.y), 400, 6);
+    // 所有葉片被震開，隨後彈回
+    const b = P.buf, ex = cx(exitT.x), ey = cy(exitT.y);
+    for (let i = 0; i < P.n; i++) {
+      const o = i * 9, dx = b[o+2] - ex, dy = b[o+3] - ey, d = Math.hypot(dx, dy) + 1;
+      b[o+4] += dx / d * 900 / (d * 0.05 + 30); b[o+5] += dy / d * 900 / (d * 0.05 + 30);
+    }
+    $('res').textContent = `${steps} 步 · 用了 ${Math.min(sec, LIMIT)} 秒，剩 ${Math.max(0, LIMIT - sec)} 秒 · 煙火 ${fwUsed} 發`;
+    setTimeout(() => { $('win').hidden = false; $('btnNext').focus(); }, 900);
+  }
+
+  // ---------- 主迴圈 ----------
+  let last = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (!ready) { last = now; return; }
+    try { step(now); } catch (err) { console.error(err); }
+  }
+  function step(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const t = now / 1000;
+
+    // 玩家平滑移動
+    if (player.x === player.fx && player.y === player.fy) {
+      if (route.length) { const [nx, ny] = route[0]; if (tryStep(nx - player.x, ny - player.y)) route.shift(); else route = []; }
+      else if (held) tryStep(held[0], held[1]);
+    }
+    const sp = 9 * dt;
+    player.fx += Math.max(-sp, Math.min(sp, player.x - player.fx));
+    player.fy += Math.max(-sp, Math.min(sp, player.y - player.fy));
+    const px = cx(player.fx), py = cy(player.fy);
+    if (!won && !dead && player.fx === exitT.x && player.fy === exitT.y) win();
+    const remain = LIMIT - (now - t0) / 1000;
+    if (!won && !dead) {
+      const sec = Math.max(0, Math.ceil(remain));
+      $('time').textContent = sec;
+      $('timeBox').className = sec <= 5 ? 'danger' : sec <= 10 ? 'warn' : '';
+      if (sec <= 5 && sec < lastTick && sec > 0) SFX.tick(sec);
+      lastTick = sec;
+      if (remain <= 0) blowUp(px, py);
+    }
+    if (!dead && Math.random() < 0.5) motes.push({ x: px + (Math.random() - .5) * 6, y: py + (Math.random() - .5) * 6, vx: (Math.random() - .5) * .4, vy: -Math.random() * .5, life: 1, c: LEAF[5] });
+
+    // 背景
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(bg, 0, 0);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    // 出口：外牆缺口 + 光暈
+    const ex = cx(exitT.x), ey = cy(exitT.y);
+    const g = ctx.createRadialGradient(ex, ey, 0, ex, ey, T * 1.6);
+    g.addColorStop(0, A(TH.acc, 0.55)); g.addColorStop(1, A(TH.acc, 0));
+    ctx.fillStyle = g; ctx.fillRect(ex - T * 2, ey - T * 2, T * 4, T * 4);
+    ctx.fillStyle = `rgb(${TH.light})`;
+    for (let k = 0; k < 10; k++) {
+      const a = t * 1.3 + k * 0.628, r = T * (0.25 + 0.15 * Math.sin(t * 2 + k));
+      ctx.fillRect(ex + Math.cos(a) * r - 1, ey + Math.sin(a) * r - 1, 2, 2);
+    }
+
+    // 葉片粒子：彈簧回原位，被玩家與滑鼠撥開，隨風搖曳
+    const b = P.buf, R = T * 1.25, R2 = R * R, sway = reduce ? 0 : T * 0.06;
+    const buckets = [[], [], [], [], [], []];
+    for (let i = 0; i < P.n; i++) {
+      const o = i * 9;
+      let x = b[o+2], y = b[o+3], vx = b[o+4], vy = b[o+5];
+      const hx = b[o] + Math.sin(t * 0.9 + b[o+6] + b[o+1] * 0.01) * sway, hy = b[o+1];
+      vx += (hx - x) * 0.06; vy += (hy - y) * 0.06;
+      for (let s = 0; s < 2; s++) {
+        const qx = s ? mouse.x : px, qy = s ? mouse.y : py;
+        const dx = x - qx, dy = y - qy, d2 = dx * dx + dy * dy;
+        if (d2 < R2 && d2 > 0.01) { const d = Math.sqrt(d2), f = (1 - d / R) * 1.6; vx += dx / d * f; vy += dy / d * f; }
+      }
+      vx *= 0.82; vy *= 0.82; x += vx; y += vy;
+      b[o+2] = x; b[o+3] = y; b[o+4] = vx; b[o+5] = vy;
+      buckets[b[o+8]].push(o);
+    }
+    for (let c = 0; c < 6; c++) {
+      ctx.fillStyle = LEAF[c]; ctx.globalAlpha = 0.8 + c * 0.04;
+      for (const o of buckets[c]) { const s = b[o+7]; ctx.fillRect(b[o+2] - s / 2, b[o+3] - s / 2, s, s); }
+    }
+    ctx.globalAlpha = 1;
+
+    // 自動前往的路線
+    if (route.length) {
+      ctx.fillStyle = A(TH.acc, 0.35);
+      route.forEach(([x, y], k) => { const r = 1.6 + Math.sin(t * 5 - k * 0.5) * 0.6; ctx.fillRect(cx(x) - r, cy(y) - r, r * 2, r * 2); });
+    }
+
+    // 拖尾與爆散光點
+    for (let k = motes.length - 1; k >= 0; k--) {
+      const m = motes[k]; m.x += m.vx; m.y += m.vy; m.vx *= 0.97; m.vy *= 0.97; m.life -= 0.02;
+      if (m.life <= 0) { motes.splice(k, 1); continue; }
+      ctx.globalAlpha = m.life; ctx.fillStyle = m.c; ctx.fillRect(m.x - 1, m.y - 1, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+
+    // 玩家：一顆螢火；最後 5 秒越閃越快、越脹越大、轉成紅色
+    if (!dead) {
+      const hot = !won && remain < 5 ? 1 - Math.max(0, remain) / 5 : 0;
+      const beat = hot ? 0.5 + 0.5 * Math.sin(t * (8 + hot * 22)) : 0;
+      const gr = T * (0.9 + hot * 0.9 * beat), glowC = hot ? '255,90,74' : TH.acc;
+      const pg = ctx.createRadialGradient(px, py, 0, px, py, gr);
+      pg.addColorStop(0, A(TH.light, 0.95)); pg.addColorStop(0.25, A(glowC, 0.6 + hot * 0.3)); pg.addColorStop(1, A(glowC, 0));
+      ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(px, py, gr, 0, 6.283); ctx.fill();
+      ctx.fillStyle = hot && beat > 0.5 ? '#FF5A4A' : TH.core;
+      ctx.beginPath(); ctx.arc(px, py, Math.max(2.5, T * (0.13 + hot * 0.12 * beat)), 0, 6.283); ctx.fill();
+    }
+
+    // 螢火模式：四周暗下來，只看得見身邊的路
+    if (fog && !won) {
+      const fr = T * Math.max(3, 5.5 - (level - 1) * 0.5), fg = ctx.createRadialGradient(px, py, fr * 0.35, px, py, fr);
+      fg.addColorStop(0, A(TH.fog, 0)); fg.addColorStop(1, A(TH.fog, 0.72));
+      ctx.fillStyle = fg; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = A(TH.acc, 0.9);          // 遠方出口仍微微閃爍
+      const bl = 2 + Math.sin(t * 3) * 1;
+      ctx.beginPath(); ctx.arc(ex, ey, bl, 0, 6.283); ctx.fill();
+    }
+
+    drawExitGate(t, false);
+    for (const c of critters) drawCritter(c, t, dt);
+    drawExitGate(t, true);
+    drawFireworks(dt);
+
+    // 森林上空漂浮的螢火蟲
+    for (const f of flies) {
+      if (!reduce) { f.a += (Math.random() - 0.5) * 0.3; f.x += Math.cos(f.a) * f.s; f.y += Math.sin(f.a) * f.s; }
+      if (f.x < 0) f.x = W; if (f.x > W) f.x = 0; if (f.y < 0) f.y = H; if (f.y > H) f.y = 0;
+      ctx.globalAlpha = 0.25 + 0.75 * Math.max(0, Math.sin(t * 1.7 + f.p));
+      ctx.fillStyle = TH.fly; ctx.fillRect(f.x - 1, f.y - 1, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  build();
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>
